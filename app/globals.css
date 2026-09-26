@@ -1,0 +1,32 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background); --color-foreground: var(--foreground); --color-card: var(--card); --color-card-foreground: var(--card-foreground); --color-popover: var(--popover); --color-popover-foreground: var(--popover-foreground); --color-primary: var(--primary); --color-primary-foreground: var(--primary-foreground); --color-secondary: var(--secondary); --color-secondary-foreground: var(--secondary-foreground); --color-muted: var(--muted); --color-muted-foreground: var(--muted-foreground); --color-accent: var(--accent); --color-accent-foreground: var(--accent-foreground); --color-destructive: var(--destructive); --color-border: var(--border); --color-input: var(--input); --color-ring: var(--ring); --font-sans: var(--font-app); --radius-sm: calc(var(--radius) * .7); --radius-md: var(--radius); --radius-lg: calc(var(--radius) * 1.2); --radius-xl: calc(var(--radius) * 1.5);
+}
+
+:root {
+  --background: oklch(.975 .008 244); --foreground: oklch(.22 .038 248); --card: oklch(1 0 0); --card-foreground: oklch(.22 .038 248); --popover: oklch(1 0 0); --popover-foreground: oklch(.22 .038 248); --primary: oklch(.29 .075 245); --primary-foreground: oklch(.99 0 0); --secondary: oklch(.94 .015 235); --secondary-foreground: oklch(.28 .055 246); --muted: oklch(.95 .009 244); --muted-foreground: oklch(.52 .026 245); --accent: oklch(.76 .148 195); --accent-foreground: oklch(.2 .04 230); --destructive: oklch(.58 .22 27); --border: oklch(.9 .018 244); --input: oklch(.88 .018 244); --ring: oklch(.67 .13 200); --radius: .7rem; --font-app: 'Yu Gothic UI', 'Hiragino Sans', 'Noto Sans JP', system-ui, sans-serif;
+}
+
+.dark { --background: oklch(.18 .03 248); --foreground: oklch(.96 .01 245); --card: oklch(.23 .035 248); --card-foreground: oklch(.96 .01 245); --popover: oklch(.23 .035 248); --popover-foreground: oklch(.96 .01 245); --primary: oklch(.75 .12 200); --primary-foreground: oklch(.18 .03 248); --secondary: oklch(.29 .03 248); --secondary-foreground: oklch(.96 .01 245); --muted: oklch(.28 .025 248); --muted-foreground: oklch(.72 .02 245); --accent: oklch(.76 .148 195); --accent-foreground: oklch(.16 .025 248); --destructive: oklch(.68 .2 25); --border: oklch(1 0 0 / 12%); --input: oklch(1 0 0 / 18%); --ring: oklch(.7 .12 200); }
+
+@layer base { * { @apply border-border outline-ring/50; } html { @apply font-sans; } body { @apply bg-background text-foreground; font-family: var(--font-app); } button, input, select, textarea { font: inherit; } }
+
+@layer components {
+  .surface { @apply rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(9,30,48,.03),0_10px_30px_rgba(9,30,48,.035)]; }
+  .metric-card { @apply flex items-center gap-4 p-4 sm:p-5; }
+  .metric-icon { @apply grid size-11 shrink-0 place-items-center rounded-xl; }
+  .metric-icon svg { @apply size-5; }
+  .metric-icon.navy { @apply bg-blue-50 text-blue-800; } .metric-icon.amber { @apply bg-amber-50 text-amber-700; } .metric-icon.cyan { @apply bg-cyan-50 text-cyan-700; } .metric-icon.green { @apply bg-emerald-50 text-emerald-700; }
+  .section-title { @apply text-base font-bold tracking-[-.015em]; } .section-sub { @apply mt-1 text-xs text-muted-foreground; }
+  .ai-header { background: radial-gradient(circle at 85% -20%, rgba(34,211,238,.35), transparent 42%), linear-gradient(135deg, #092b4a, #114768); }
+  .score-ring { @apply grid size-11 shrink-0 place-items-center rounded-full border-[3px] border-cyan-400 bg-cyan-50 text-cyan-900; } .score-ring strong { @apply text-sm leading-none; } .score-ring span { @apply -mt-3 ml-5 text-[8px] font-bold; }
+  .pipeline-progress [data-slot='progress-track'] { @apply h-2; } .pipeline-progress [data-slot='progress-indicator'] { @apply bg-cyan-500; }
+  .form-control { @apply h-10 w-full rounded-xl border border-input bg-background px-3 text-sm outline-none transition focus:border-cyan-500 focus:ring-3 focus:ring-cyan-500/15; }
+}
+
+@media (max-width: 640px) { [data-slot='tabs-list'] { max-width: 100%; overflow-x: auto; } }
