@@ -30,3 +30,65 @@
 }
 
 @media (max-width: 640px) { [data-slot='tabs-list'] { max-width: 100%; overflow-x: auto; } }
+
+/* MVP application screens */
+.auth-page { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+.auth-card { width: min(100%, 430px); padding: 32px; }
+.auth-card h1 { margin-top: 16px; font-size: 1.5rem; font-weight: 800; }
+.auth-card form { display: grid; gap: 16px; margin-top: 24px; }
+.brand-mark { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 12px; background: #123b5a; color: white; }
+.app-header { position: sticky; top: 0; z-index: 20; background: rgba(255,255,255,.94); border-bottom: 1px solid var(--border); backdrop-filter: blur(12px); }
+.app-header-inner { max-width: 1440px; margin: auto; min-height: 68px; padding: 10px 24px; display: flex; align-items: center; gap: 14px; }
+.app-content { max-width: 1440px; margin: auto; padding: 30px 24px 80px; }
+.app-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 24px; padding: 5px; border-radius: 14px; background: #e9eef2; width: fit-content; }
+.app-tabs button { display: inline-flex; align-items: center; gap: 7px; padding: 9px 15px; border-radius: 10px; color: #52677a; font-size: 13px; font-weight: 700; cursor: pointer; }
+.app-tabs button.active { background: white; color: #123b5a; box-shadow: 0 1px 4px #123b5a20; }
+.section-head { display: flex; align-items: start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.primary-button, .outline-button, .icon-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; cursor: pointer; font-size: 13px; font-weight: 700; border-radius: 10px; white-space: nowrap; }
+.primary-button { min-height: 39px; padding: 0 15px; background: #123b5a; color: white; }
+.outline-button { min-height: 36px; padding: 0 12px; border: 1px solid #d5e0e7; background: white; color: #244862; }
+.icon-button { width: 37px; height: 37px; border: 1px solid #d5e0e7; background: white; }
+.primary-button:disabled, .outline-button:disabled { opacity: .45; cursor: not-allowed; }
+.text-button { color: #386a83; font-size: 13px; font-weight: 700; cursor: pointer; }
+.muted { color: #687a8b; }
+.notice { padding: 12px 15px; border-radius: 11px; background: #e4f3f5; color: #185165; font-size: 13px; }
+.field { display: grid; gap: 7px; min-width: 0; }
+.field > span { font-size: 13px; font-weight: 700; }
+.form-control.textarea { min-height: 100px; height: auto; padding: 10px 12px; resize: vertical; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 16px; }
+.search-box { max-width: 520px; display: flex; align-items: center; gap: 9px; border: 1px solid #d5e0e7; border-radius: 11px; padding: 0 12px; min-height: 39px; color: #6b8291; }
+.search-box input { width: 100%; outline: none; font-size: 13px; color: #213b50; }
+.case-list { margin: 18px -20px -20px; }
+.case-row { display: flex; align-items: start; gap: 14px; padding: 19px 20px; border-top: 1px solid #e8eef2; }
+.case-icon { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 11px; color: #18617d; background: #e6f3f8; }
+.row-actions { display: flex; flex-wrap: wrap; gap: 7px; justify-content: end; }
+.badge { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 20px; background: #e4f4f5; color: #216178; font-size: 11px; font-weight: 700; }
+.muted-badge { background: #edf0f2; color: #596b76; }
+.product-tag { display: inline-block; padding: 4px 7px; background: #eff5f8; color: #406176; border-radius: 6px; font-size: 11px; }
+.empty { padding: 20px; color: #718493; font-size: 13px; }
+.product-checks { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; margin-top: 12px; }
+.product-check { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; border: 1px solid #dce6eb; border-radius: 10px; font-size: 13px; }
+.product-check label { cursor: pointer; }
+.product-check input { accent-color: #15587b; }
+.product-check small { color: #708493; }
+.product-check select { border: 1px solid #d5e0e7; border-radius: 7px; padding: 4px; background: white; font-size: 12px; }
+.switch-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; margin-top: 16px; margin-bottom: 18px; }
+.switch-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 48px; padding: 9px 12px; border: 1px solid #dce6eb; border-radius: 10px; cursor: pointer; }
+.switch-row strong { display: block; font-size: 13px; }
+.switch-row small { display: block; margin-top: 2px; color: #738592; font-size: 11px; }
+.switch-row input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.switch-track { flex: none; width: 38px; height: 22px; border-radius: 30px; background: #b4c4ce; position: relative; transition: background .15s; }
+.switch-track::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: white; transition: transform .15s; }
+.switch-row input:checked + .switch-track { background: #147493; }
+.switch-row input:checked + .switch-track::after { transform: translateX(16px); }
+.switch-row:focus-within { outline: 3px solid #67bdd1; outline-offset: 2px; }
+.inbox-card, .product-card, .share-card { border: 1px solid #e0e8ed; border-radius: 12px; padding: 15px; background: #fff; }
+.note-box { margin-top: 10px; padding: 10px 12px; border-radius: 9px; background: #f1f6f8; font-size: 13px; white-space: pre-wrap; }
+.product-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; }
+.share-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; margin-top: 16px; }
+.share-card .switch-row { margin-top: 9px; }
+.member-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid #ebf0f3; font-size: 13px; }
+.member-row span { color: #5b7180; }
+.member-row small { margin-left: auto; color: #5b7180; }
+@media (max-width: 850px) { .form-grid, .product-checks, .switch-grid, .product-grid, .share-grid { grid-template-columns: 1fr; } .case-row { flex-wrap: wrap; } .row-actions { width: 100%; justify-content: start; padding-left: 54px; } }
+@media (max-width: 540px) { .app-header-inner, .app-content { padding-left: 16px; padding-right: 16px; } .app-tabs { width: 100%; } .app-tabs button { flex: 1; justify-content: center; padding: 8px; font-size: 11px; } .app-tabs svg { display: none; } .section-head { flex-wrap: wrap; } }
