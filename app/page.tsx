@@ -420,9 +420,7 @@ export default function Home() {
         const probability = statusProbability[item.status ?? ''] ?? 0;
         return {
           ...item,
-          label: item.issueSummary
-            ? `${item.accountName}｜${item.issueSummary}`
-            : item.accountName,
+          label: item.accountName,
           probability,
           expectedRevenue: Math.round((item.amount * probability) / 100),
           fill: statusColor[item.status ?? ''] ?? '#64748b',
