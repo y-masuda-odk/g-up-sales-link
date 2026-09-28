@@ -12,7 +12,8 @@ export type AppUser = {
 
 const encoder = new TextEncoder();
 const SESSION_DAYS = 7;
-const PASSWORD_ROUNDS = 310_000;
+// Cloudflare Workers Web Crypto accepts at most 100,000 PBKDF2 iterations.
+const PASSWORD_ROUNDS = 100_000;
 
 export function database(): D1Database {
   if (!env.DB)
@@ -77,7 +78,7 @@ export async function verifyPassword(
   if (algorithm !== 'pbkdf2' || !roundsText || !saltText || !digestText)
     return false;
   const rounds = Number(roundsText);
-  if (!Number.isInteger(rounds) || rounds < 100_000 || rounds > 1_000_000)
+  if (!Number.isInteger(rounds) || rounds !== PASSWORD_ROUNDS)
     return false;
   const salt = base64ToBytes(saltText);
   const expected = base64ToBytes(digestText);
