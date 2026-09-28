@@ -15,6 +15,13 @@
       "when": 1790491957944,
       "tag": "0001_charming_doctor_strange",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790585606002,
+      "tag": "0002_neat_thunderball",
+      "breakpoints": true
     }
   ]
 }

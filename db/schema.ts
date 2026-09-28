@@ -221,6 +221,12 @@ export const salesCases = sqliteTable(
     department: text('department'),
     issueSummary: text('issue_summary'),
     status: text('status'),
+    amount: integer('amount').notNull().default(0),
+    revenuePeriod: text('revenue_period', {
+      enum: ['current', 'next'],
+    })
+      .notNull()
+      .default('current'),
     nextAction: text('next_action'),
     isDraft: integer('is_draft', { mode: 'boolean' }).notNull().default(true),
     listVisible: integer('list_visible', { mode: 'boolean' })
@@ -242,6 +248,55 @@ export const salesCases = sqliteTable(
   (table) => [
     index('idx_sales_cases_team').on(table.teamId),
     index('idx_sales_cases_creator').on(table.creatorId),
+  ],
+);
+
+export const salesAccounts = sqliteTable(
+  'sales_accounts',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    teamId: integer('team_id')
+      .notNull()
+      .references(() => teams.id),
+    creatorId: integer('creator_id')
+      .notNull()
+      .references(() => users.id),
+    kind: text('kind', { enum: ['university', 'company'] }).notNull(),
+    name: text('name').notNull(),
+    priority: text('priority', { enum: ['high', 'medium', 'low'] })
+      .notNull()
+      .default('medium'),
+    scale: text('scale', { enum: ['large', 'medium', 'small'] })
+      .notNull()
+      .default('medium'),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text('updated_at')
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex('idx_sales_accounts_team_name').on(table.teamId, table.name),
+    index('idx_sales_accounts_team_priority').on(table.teamId, table.priority),
+  ],
+);
+
+export const salesTargets = sqliteTable(
+  'sales_targets',
+  {
+    teamId: integer('team_id')
+      .notNull()
+      .references(() => teams.id),
+    period: text('period', { enum: ['current', 'next'] }).notNull(),
+    revenueTarget: integer('revenue_target').notNull().default(0),
+    caseTarget: integer('case_target').notNull().default(0),
+    updatedAt: text('updated_at')
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex('idx_sales_targets_team_period').on(table.teamId, table.period),
   ],
 );
 

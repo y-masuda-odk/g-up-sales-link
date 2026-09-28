@@ -3,8 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
+  BarChart3,
   Building2,
   ClipboardList,
+  ContactRound,
+  CircleDollarSign,
   GraduationCap,
   Handshake,
   LogOut,
@@ -14,7 +17,17 @@ import {
   Send,
   Settings2,
   ShieldCheck,
+  Target,
 } from 'lucide-react';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 
 type User = {
   id: number;
@@ -56,6 +69,8 @@ type SalesCase = {
   department: string | null;
   issueSummary: string | null;
   status: string | null;
+  amount: number;
+  revenuePeriod: 'current' | 'next';
   nextAction: string | null;
   isDraft: boolean;
   listVisible: boolean;
@@ -63,6 +78,36 @@ type SalesCase = {
   showIssue: boolean;
   selectedProducts: SelectedProduct[];
   updatedAt: string;
+};
+type SalesAccount = {
+  id: number;
+  teamId: number;
+  teamName: string;
+  creatorId: number;
+  kind: 'university' | 'company';
+  name: string;
+  priority: 'high' | 'medium' | 'low';
+  scale: 'large' | 'medium' | 'small';
+  status: string | null;
+  caseCount: number;
+  updatedAt: string;
+};
+type DashboardCase = {
+  id: number;
+  accountName: string;
+  issueSummary: string | null;
+  status: string | null;
+  amount: number;
+  revenuePeriod: 'current' | 'next';
+  teamId: number;
+  teamName: string;
+  ownerName: string;
+};
+type SalesTarget = {
+  teamId: number;
+  period: 'current' | 'next';
+  revenueTarget: number;
+  caseTarget: number;
 };
 type Consultation = {
   id: number;
@@ -84,6 +129,9 @@ type AppData = {
   teams: Team[];
   products: Product[];
   cases: SalesCase[];
+  salesAccounts: SalesAccount[];
+  dashboardCases: DashboardCase[];
+  salesTargets: SalesTarget[];
   sent: Consultation[];
   received: Consultation[];
   members: {
@@ -102,12 +150,21 @@ type CaseForm = {
   department: string;
   issueSummary: string;
   status: string;
+  amount: number;
+  revenuePeriod: 'current' | 'next';
   nextAction: string;
   isDraft: boolean;
   listVisible: boolean;
   showDepartment: boolean;
   showIssue: boolean;
   selectedProducts: { productId: number; stage: 'mentioned' | 'proposed' }[];
+};
+type SalesAccountForm = {
+  id?: number;
+  kind: 'university' | 'company';
+  name: string;
+  priority: 'high' | 'medium' | 'low';
+  scale: 'large' | 'medium' | 'small';
 };
 type ProductForm = {
   id?: number;
@@ -128,26 +185,49 @@ type ConsultForm = {
 };
 
 const statuses = [
-  '初回接点',
-  '課題把握',
-  '提案準備',
-  '提案中',
-  '契約調整',
-  '受注',
-  '失注',
+  'A 受注済',
+  'B ほぼ確定・契約待ち',
+  'C 商談中',
+  'D アポ済み・見積提出前',
+  'E アポ取り中',
+  'F 失注',
 ];
+const statusProbability: Record<string, number> = {
+  'A 受注済': 100,
+  'B ほぼ確定・契約待ち': 90,
+  'C 商談中': 50,
+  'D アポ済み・見積提出前': 20,
+  'E アポ取り中': 10,
+  'F 失注': 0,
+};
+const statusColor: Record<string, string> = {
+  'A 受注済': '#15803d',
+  'B ほぼ確定・契約待ち': '#0f766e',
+  'C 商談中': '#2563eb',
+  'D アポ済み・見積提出前': '#d97706',
+  'E アポ取り中': '#7c3aed',
+  'F 失注': '#64748b',
+};
 const blankCase = (): CaseForm => ({
   accountKind: 'university',
   accountName: '',
   department: '',
   issueSummary: '',
-  status: '',
+  status: 'E アポ取り中',
+  amount: 0,
+  revenuePeriod: 'current',
   nextAction: '',
   isDraft: true,
   listVisible: true,
   showDepartment: true,
   showIssue: true,
   selectedProducts: [],
+});
+const blankSalesAccount = (): SalesAccountForm => ({
+  kind: 'university',
+  name: '',
+  priority: 'medium',
+  scale: 'medium',
 });
 const blankProduct = (): ProductForm => ({
   name: '',
@@ -228,6 +308,10 @@ function formatDate(value: string): string {
     : date.toLocaleString('ja-JP', { dateStyle: 'short', timeStyle: 'short' });
 }
 
+function formatYen(value: number): string {
+  return `${Math.round(value).toLocaleString('ja-JP')}円`;
+}
+
 export default function Home() {
   const [data, setData] = useState<AppData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -237,13 +321,22 @@ export default function Home() {
   const [authName, setAuthName] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [bootstrapToken, setBootstrapToken] = useState('');
-  const [tab, setTab] = useState<'cases' | 'inbox' | 'products' | 'admin'>(
-    'cases',
-  );
+  const [tab, setTab] = useState<
+    'cases' | 'accounts' | 'dashboard' | 'inbox' | 'products' | 'admin'
+  >('cases');
   const [query, setQuery] = useState('');
   const [caseForm, setCaseForm] = useState<CaseForm | null>(null);
   const [productForm, setProductForm] = useState<ProductForm | null>(null);
+  const [accountForm, setAccountForm] = useState<SalesAccountForm | null>(null);
   const [consultForm, setConsultForm] = useState<ConsultForm | null>(null);
+  const [dashboardPeriod, setDashboardPeriod] = useState<'current' | 'next'>(
+    'current',
+  );
+  const [targetDraft, setTargetDraft] = useState<{
+    period: 'current' | 'next';
+    revenueTarget: number;
+    caseTarget: number;
+  } | null>(null);
   const [inviteUrl, setInviteUrl] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
@@ -313,6 +406,58 @@ export default function Home() {
         ].some((value) => value?.toLocaleLowerCase('ja-JP').includes(q)),
     );
   }, [data?.cases, query]);
+
+  const dashboard = useMemo(() => {
+    const allCases = (data?.dashboardCases ?? []).filter(
+      (item) => item.revenuePeriod === dashboardPeriod,
+    );
+    const target = (data?.salesTargets ?? []).find(
+      (item) =>
+        item.period === dashboardPeriod && item.teamId === data?.user.teamId,
+    );
+    const chart = allCases
+      .map((item) => {
+        const probability = statusProbability[item.status ?? ''] ?? 0;
+        return {
+          ...item,
+          label: item.issueSummary
+            ? `${item.accountName}｜${item.issueSummary}`
+            : item.accountName,
+          probability,
+          expectedRevenue: Math.round((item.amount * probability) / 100),
+          fill: statusColor[item.status ?? ''] ?? '#64748b',
+        };
+      })
+      .sort((a, b) => b.expectedRevenue - a.expectedRevenue);
+    const revenueTarget = target?.revenueTarget ?? 0;
+    const caseTarget = target?.caseTarget ?? 0;
+    const expectedRevenue = chart.reduce(
+      (sum, item) => sum + item.expectedRevenue,
+      0,
+    );
+    return {
+      chart,
+      revenueTarget,
+      caseTarget,
+      expectedRevenue,
+      bookedRevenue: chart
+        .filter((item) => item.status === 'A 受注済')
+        .reduce((sum, item) => sum + item.amount, 0),
+      pipelineRevenue: chart.reduce((sum, item) => sum + item.amount, 0),
+      progress:
+        revenueTarget > 0
+          ? Math.min(100, Math.round((expectedRevenue / revenueTarget) * 100))
+          : 0,
+    };
+  }, [dashboardPeriod, data]);
+  const editableTarget =
+    targetDraft?.period === dashboardPeriod
+      ? targetDraft
+      : {
+          period: dashboardPeriod,
+          revenueTarget: dashboard.revenueTarget,
+          caseTarget: dashboard.caseTarget,
+        };
 
   if (loading)
     return (
@@ -442,6 +587,8 @@ export default function Home() {
             department: item.department ?? '',
             issueSummary: item.issueSummary ?? '',
             status: item.status ?? '',
+            amount: item.amount,
+            revenuePeriod: item.revenuePeriod,
             nextAction: item.nextAction ?? '',
             isDraft: item.isDraft,
             listVisible: item.listVisible,
@@ -514,6 +661,20 @@ export default function Home() {
           >
             <ClipboardList size={17} />
             案件
+          </button>
+          <button
+            className={tab === 'accounts' ? 'active' : ''}
+            onClick={() => setTab('accounts')}
+          >
+            <ContactRound size={17} />
+            営業先リスト
+          </button>
+          <button
+            className={tab === 'dashboard' ? 'active' : ''}
+            onClick={() => setTab('dashboard')}
+          >
+            <BarChart3 size={17} />
+            進行中ダッシュボード
           </button>
           <button
             className={tab === 'inbox' ? 'active' : ''}
@@ -600,6 +761,12 @@ export default function Home() {
                         {item.issueSummary && (
                           <p className="mt-2 text-sm">{item.issueSummary}</p>
                         )}
+                        {item.amount > 0 && (
+                          <p className="mt-2 text-sm font-bold text-slate-700">
+                            {formatYen(item.amount)} ·{' '}
+                            {item.revenuePeriod === 'current' ? '今期' : '来期'}
+                          </p>
+                        )}
                         {item.selectedProducts.length > 0 && (
                           <div className="mt-2 flex flex-wrap gap-1">
                             {item.selectedProducts.map((product) => (
@@ -665,6 +832,32 @@ export default function Home() {
                   </button>
                 </div>
                 <div className="form-grid">
+                  <Field label="営業先リストから選択（任意）">
+                    <select
+                      className="form-control"
+                      value=""
+                      onChange={(event) => {
+                        const account = data.salesAccounts.find(
+                          (item) => item.id === Number(event.target.value),
+                        );
+                        if (account)
+                          setCaseForm({
+                            ...caseForm,
+                            accountName: account.name,
+                            accountKind: account.kind,
+                          });
+                      }}
+                    >
+                      <option value="">営業先を選択</option>
+                      {data.salesAccounts
+                        .filter((item) => item.teamId === me.teamId)
+                        .map((account) => (
+                          <option key={account.id} value={account.id}>
+                            {account.name}
+                          </option>
+                        ))}
+                    </select>
+                  </Field>
                   <Field label="営業先の種類">
                     <select
                       className="form-control"
@@ -717,6 +910,37 @@ export default function Home() {
                       {statuses.map((status) => (
                         <option key={status}>{status}</option>
                       ))}
+                    </select>
+                  </Field>
+                  <Field label="売上金額（円）">
+                    <input
+                      className="form-control"
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={caseForm.amount}
+                      onChange={(event) =>
+                        setCaseForm({
+                          ...caseForm,
+                          amount: Math.max(0, Number(event.target.value) || 0),
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field label="売上計上時期">
+                    <select
+                      className="form-control"
+                      value={caseForm.revenuePeriod}
+                      onChange={(event) =>
+                        setCaseForm({
+                          ...caseForm,
+                          revenuePeriod: event.target
+                            .value as CaseForm['revenuePeriod'],
+                        })
+                      }
+                    >
+                      <option value="current">今期</option>
+                      <option value="next">来期</option>
                     </select>
                   </Field>
                   <Field label="課題概要">
@@ -973,6 +1197,395 @@ export default function Home() {
                 </button>
               </section>
             )}
+          </div>
+        )}
+
+        {tab === 'accounts' && (
+          <div className="space-y-5">
+            <section className="surface p-5">
+              <div className="section-head">
+                <div>
+                  <h2 className="section-title">営業先リスト</h2>
+                  <p className="section-sub">
+                    優先度と規模感を整理し、案件の最新ステータスを確認できます。
+                  </p>
+                </div>
+                {me.teamId && (
+                  <button
+                    className="primary-button"
+                    onClick={() => setAccountForm(blankSalesAccount())}
+                  >
+                    <Plus size={16} />
+                    営業先を登録
+                  </button>
+                )}
+              </div>
+              <div className="accounts-table-wrap">
+                <table className="accounts-table">
+                  <thead>
+                    <tr>
+                      <th>営業先</th>
+                      <th>優先度</th>
+                      <th>規模感</th>
+                      <th>営業ステータス</th>
+                      <th>案件数</th>
+                      <th aria-label="操作" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.salesAccounts.map((account) => (
+                      <tr key={account.id}>
+                        <td>
+                          <div className="flex items-center gap-2">
+                            {account.kind === 'university' ? (
+                              <GraduationCap size={17} />
+                            ) : (
+                              <Building2 size={17} />
+                            )}
+                            <div>
+                              <strong>{account.name}</strong>
+                              <small>{account.teamName}</small>
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <span
+                            className={`priority-badge ${account.priority}`}
+                          >
+                            {account.priority === 'high'
+                              ? '高'
+                              : account.priority === 'medium'
+                                ? '中'
+                                : '低'}
+                          </span>
+                        </td>
+                        <td>
+                          {account.scale === 'large'
+                            ? '大'
+                            : account.scale === 'medium'
+                              ? '中'
+                              : '小'}
+                        </td>
+                        <td>
+                          {account.status ? (
+                            <span className="badge">{account.status}</span>
+                          ) : (
+                            <span className="muted text-sm">案件未登録</span>
+                          )}
+                        </td>
+                        <td>{account.caseCount}</td>
+                        <td>
+                          {account.teamId === me.teamId && (
+                            <button
+                              className="outline-button"
+                              onClick={() =>
+                                setAccountForm({
+                                  id: account.id,
+                                  kind: account.kind,
+                                  name: account.name,
+                                  priority: account.priority,
+                                  scale: account.scale,
+                                })
+                              }
+                            >
+                              編集
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {!data.salesAccounts.length && (
+                  <p className="empty">営業先はまだ登録されていません。</p>
+                )}
+              </div>
+            </section>
+            {accountForm && (
+              <section className="surface p-5">
+                <div className="section-head">
+                  <h2 className="section-title">
+                    {accountForm.id ? '営業先を編集' : '営業先を登録'}
+                  </h2>
+                  <button
+                    className="text-button"
+                    onClick={() => setAccountForm(null)}
+                  >
+                    閉じる
+                  </button>
+                </div>
+                <div className="form-grid">
+                  <Field label="営業先の種類">
+                    <select
+                      className="form-control"
+                      value={accountForm.kind}
+                      onChange={(event) =>
+                        setAccountForm({
+                          ...accountForm,
+                          kind: event.target.value as SalesAccountForm['kind'],
+                        })
+                      }
+                    >
+                      <option value="university">大学</option>
+                      <option value="company">企業</option>
+                    </select>
+                  </Field>
+                  <Field label="営業先名（必須）">
+                    <input
+                      className="form-control"
+                      value={accountForm.name}
+                      onChange={(event) =>
+                        setAccountForm({
+                          ...accountForm,
+                          name: event.target.value,
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field label="優先度">
+                    <select
+                      className="form-control"
+                      value={accountForm.priority}
+                      onChange={(event) =>
+                        setAccountForm({
+                          ...accountForm,
+                          priority: event.target
+                            .value as SalesAccountForm['priority'],
+                        })
+                      }
+                    >
+                      <option value="high">高</option>
+                      <option value="medium">中</option>
+                      <option value="low">低</option>
+                    </select>
+                  </Field>
+                  <Field label="規模感">
+                    <select
+                      className="form-control"
+                      value={accountForm.scale}
+                      onChange={(event) =>
+                        setAccountForm({
+                          ...accountForm,
+                          scale: event.target
+                            .value as SalesAccountForm['scale'],
+                        })
+                      }
+                    >
+                      <option value="large">大</option>
+                      <option value="medium">中</option>
+                      <option value="small">小</option>
+                    </select>
+                  </Field>
+                </div>
+                <button
+                  className="primary-button mt-5"
+                  disabled={busy || !accountForm.name.trim()}
+                  onClick={async () => {
+                    const result = await act(
+                      'saveSalesAccount',
+                      accountForm,
+                      '営業先を保存しました。',
+                    );
+                    if (result) setAccountForm(null);
+                  }}
+                >
+                  保存
+                </button>
+              </section>
+            )}
+          </div>
+        )}
+
+        {tab === 'dashboard' && (
+          <div className="space-y-5">
+            <section className="surface dashboard-hero p-5">
+              <div className="section-head">
+                <div>
+                  <h2 className="section-title">進行中ダッシュボード</h2>
+                  <p className="section-sub">
+                    案件金額に営業ステータスの確度を掛け、目標への進捗を表示します。
+                  </p>
+                </div>
+                <div className="period-switch" aria-label="対象期間">
+                  <button
+                    className={dashboardPeriod === 'current' ? 'active' : ''}
+                    onClick={() => setDashboardPeriod('current')}
+                  >
+                    今期
+                  </button>
+                  <button
+                    className={dashboardPeriod === 'next' ? 'active' : ''}
+                    onClick={() => setDashboardPeriod('next')}
+                  >
+                    来期
+                  </button>
+                </div>
+              </div>
+              <div className="dashboard-metrics">
+                <div className="kpi-card">
+                  <Target size={19} />
+                  <span>目標売上</span>
+                  <strong>{formatYen(dashboard.revenueTarget)}</strong>
+                </div>
+                <div className="kpi-card accent-card">
+                  <CircleDollarSign size={19} />
+                  <span>確度加重後の見込み</span>
+                  <strong>{formatYen(dashboard.expectedRevenue)}</strong>
+                </div>
+                <div className="kpi-card">
+                  <BarChart3 size={19} />
+                  <span>目標達成度</span>
+                  <strong>{dashboard.progress}%</strong>
+                </div>
+                <div className="kpi-card">
+                  <ClipboardList size={19} />
+                  <span>案件数</span>
+                  <strong>
+                    {dashboard.chart.length}
+                    {dashboard.caseTarget > 0 && ` / ${dashboard.caseTarget}`}
+                  </strong>
+                </div>
+              </div>
+              <div className="progress-block">
+                <div>
+                  <span>目標に対する見込み売上</span>
+                  <strong>
+                    {formatYen(dashboard.expectedRevenue)} /{' '}
+                    {formatYen(dashboard.revenueTarget)}
+                  </strong>
+                </div>
+                <div
+                  className="revenue-progress"
+                  aria-label={`達成度${dashboard.progress}%`}
+                >
+                  <span style={{ width: `${dashboard.progress}%` }} />
+                </div>
+                <p>
+                  受注済 {formatYen(dashboard.bookedRevenue)} · 案件総額{' '}
+                  {formatYen(dashboard.pipelineRevenue)}
+                </p>
+              </div>
+            </section>
+
+            {me.teamId && (
+              <section className="surface p-5">
+                <div className="section-head">
+                  <div>
+                    <h2 className="section-title">目標KPI</h2>
+                    <p className="section-sub">
+                      {dashboardPeriod === 'current' ? '今期' : '来期'}
+                      の部隊目標を設定します。
+                    </p>
+                  </div>
+                </div>
+                <div className="target-editor">
+                  <Field label="目標売上（円）">
+                    <input
+                      className="form-control"
+                      type="number"
+                      min="0"
+                      value={editableTarget.revenueTarget}
+                      onChange={(event) =>
+                        setTargetDraft({
+                          ...editableTarget,
+                          revenueTarget: Math.max(
+                            0,
+                            Number(event.target.value) || 0,
+                          ),
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field label="目標案件数">
+                    <input
+                      className="form-control"
+                      type="number"
+                      min="0"
+                      value={editableTarget.caseTarget}
+                      onChange={(event) =>
+                        setTargetDraft({
+                          ...editableTarget,
+                          caseTarget: Math.max(
+                            0,
+                            Number(event.target.value) || 0,
+                          ),
+                        })
+                      }
+                    />
+                  </Field>
+                  <button
+                    className="primary-button"
+                    disabled={busy}
+                    onClick={async () => {
+                      const result = await act(
+                        'saveSalesTarget',
+                        editableTarget,
+                        '目標KPIを保存しました。',
+                      );
+                      if (result) setTargetDraft(null);
+                    }}
+                  >
+                    目標を保存
+                  </button>
+                </div>
+              </section>
+            )}
+
+            <section className="surface p-5">
+              <div className="section-head">
+                <div>
+                  <h2 className="section-title">案件別 見込み売上</h2>
+                  <p className="section-sub">
+                    横軸は「売上金額 × ステータス確度」、縦軸は案件です。
+                  </p>
+                </div>
+              </div>
+              {dashboard.chart.length ? (
+                <div
+                  className="chart-wrap"
+                  style={{ height: Math.max(300, dashboard.chart.length * 54) }}
+                >
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={dashboard.chart}
+                      layout="vertical"
+                      margin={{ top: 8, right: 28, bottom: 8, left: 12 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                      <XAxis
+                        type="number"
+                        tickFormatter={(value) =>
+                          `${Math.round(Number(value) / 10000)}万`
+                        }
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="label"
+                        width={180}
+                        tick={{ fontSize: 12 }}
+                      />
+                      <Tooltip
+                        formatter={(value) => [
+                          formatYen(Number(value)),
+                          '見込み売上',
+                        ]}
+                      />
+                      <Bar dataKey="expectedRevenue" radius={[0, 6, 6, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <p className="empty">対象期間の案件はまだありません。</p>
+              )}
+              <div className="probability-legend">
+                {statuses.map((status) => (
+                  <span key={status}>
+                    <i style={{ background: statusColor[status] }} />
+                    {status.slice(0, 1)} {statusProbability[status]}%
+                  </span>
+                ))}
+              </div>
+            </section>
           </div>
         )}
 

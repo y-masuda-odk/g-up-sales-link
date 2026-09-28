@@ -27,14 +27,27 @@ export class ApiError extends Error {
 }
 
 const STATUS = new Set([
-  '初回接点',
-  '課題把握',
-  '提案準備',
-  '提案中',
-  '契約調整',
-  '受注',
-  '失注',
+  'A 受注済',
+  'B ほぼ確定・契約待ち',
+  'C 商談中',
+  'D アポ済み・見積提出前',
+  'E アポ取り中',
+  'F 失注',
 ]);
+
+const LEGACY_STATUS: Record<string, string> = {
+  受注: 'A 受注済',
+  契約調整: 'B ほぼ確定・契約待ち',
+  提案中: 'C 商談中',
+  提案準備: 'D アポ済み・見積提出前',
+  課題把握: 'E アポ取り中',
+  初回接点: 'E アポ取り中',
+  失注: 'F 失注',
+};
+
+function normalizedStatus(value: string | null): string | null {
+  return value ? (LEGACY_STATUS[value] ?? value) : null;
+}
 
 function string(
   value: unknown,
@@ -68,6 +81,12 @@ function email(value: unknown): string {
 function integer(value: unknown, label: string): number {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0)
     throw new ApiError(`${label}を確認してください。`);
+  return value;
+}
+
+function nonNegativeInteger(value: unknown, label: string): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0)
+    throw new ApiError(`${label}を0以上の整数で入力してください。`);
   return value;
 }
 
@@ -229,6 +248,8 @@ type CaseDbRow = {
   department: string | null;
   issueSummary: string | null;
   status: string | null;
+  amount: number;
+  revenuePeriod: string;
   nextAction: string | null;
   isDraft: number;
   listVisible: number;
@@ -250,6 +271,8 @@ export async function loadApp(user: AppUser, query = ''): Promise<Payload> {
     caseResult,
     linkResult,
     shareResult,
+    accountResult,
+    targetResult,
   ] = await Promise.all([
     db
       .prepare('SELECT id, name FROM companies ORDER BY name')
@@ -271,7 +294,7 @@ export async function loadApp(user: AppUser, query = ''): Promise<Payload> {
       .all(),
     db
       .prepare(
-        'SELECT c.id, c.creator_id AS creatorId, c.team_id AS teamId, c.account_kind AS accountKind, c.account_name AS accountName, c.department, c.issue_summary AS issueSummary, c.status, c.next_action AS nextAction, c.is_draft AS isDraft, c.list_visible AS listVisible, c.show_department AS showDepartment, c.show_issue AS showIssue, c.created_at AS createdAt, c.updated_at AS updatedAt, u.name AS ownerName, u.email AS ownerEmail, t.name AS teamName FROM sales_cases c JOIN users u ON u.id = c.creator_id JOIN teams t ON t.id = c.team_id ORDER BY c.updated_at DESC',
+        'SELECT c.id, c.creator_id AS creatorId, c.team_id AS teamId, c.account_kind AS accountKind, c.account_name AS accountName, c.department, c.issue_summary AS issueSummary, c.status, c.amount, c.revenue_period AS revenuePeriod, c.next_action AS nextAction, c.is_draft AS isDraft, c.list_visible AS listVisible, c.show_department AS showDepartment, c.show_issue AS showIssue, c.created_at AS createdAt, c.updated_at AS updatedAt, u.name AS ownerName, u.email AS ownerEmail, t.name AS teamName FROM sales_cases c JOIN users u ON u.id = c.creator_id JOIN teams t ON t.id = c.team_id ORDER BY c.updated_at DESC',
       )
       .all<CaseDbRow>(),
     db
@@ -289,6 +312,33 @@ export async function loadApp(user: AppUser, query = ''): Promise<Payload> {
         'SELECT from_team_id AS fromTeamId, to_team_id AS toTeamId, enabled FROM team_shares',
       )
       .all<{ fromTeamId: number; toTeamId: number; enabled: number }>(),
+    db
+      .prepare(
+        "SELECT a.id, a.team_id AS teamId, a.creator_id AS creatorId, a.kind, a.name, a.priority, a.scale, a.updated_at AS updatedAt, t.name AS teamName, (SELECT c.status FROM sales_cases c WHERE c.team_id = a.team_id AND c.account_name = a.name COLLATE NOCASE AND c.is_draft = 0 ORDER BY c.updated_at DESC LIMIT 1) AS status, (SELECT COUNT(*) FROM sales_cases c WHERE c.team_id = a.team_id AND c.account_name = a.name COLLATE NOCASE AND c.is_draft = 0) AS caseCount FROM sales_accounts a JOIN teams t ON t.id = a.team_id ORDER BY CASE a.priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, a.updated_at DESC",
+      )
+      .all<{
+        id: number;
+        teamId: number;
+        creatorId: number;
+        kind: string;
+        name: string;
+        priority: string;
+        scale: string;
+        updatedAt: string;
+        teamName: string;
+        status: string | null;
+        caseCount: number;
+      }>(),
+    db
+      .prepare(
+        'SELECT team_id AS teamId, period, revenue_target AS revenueTarget, case_target AS caseTarget FROM sales_targets',
+      )
+      .all<{
+        teamId: number;
+        period: string;
+        revenueTarget: number;
+        caseTarget: number;
+      }>(),
   ]);
   const disabled = new Set(
     (shareResult.results ?? [])
@@ -309,6 +359,7 @@ export async function loadApp(user: AppUser, query = ''): Promise<Payload> {
       }));
     const projected = {
       ...fields,
+      status: normalizedStatus(fields.status),
       isDraft: !!row.isDraft,
       listVisible: !!row.listVisible,
       showDepartment: !!row.showDepartment,
@@ -368,6 +419,29 @@ export async function loadApp(user: AppUser, query = ''): Promise<Payload> {
       ).results ?? [];
   }
 
+  const accountRows = (accountResult.results ?? [])
+    .filter(
+      (item) => user.role === 'global_admin' || item.teamId === user.teamId,
+    )
+    .map((item) => ({ ...item, status: normalizedStatus(item.status) }));
+  const dashboardCases = (caseResult.results ?? [])
+    .filter(
+      (item) =>
+        !item.isDraft &&
+        (user.role === 'global_admin' || item.teamId === user.teamId),
+    )
+    .map((item) => ({
+      id: item.id,
+      accountName: item.accountName,
+      issueSummary: item.issueSummary,
+      status: normalizedStatus(item.status),
+      amount: item.amount,
+      revenuePeriod: item.revenuePeriod,
+      teamId: item.teamId,
+      teamName: item.teamName,
+      ownerName: item.ownerName,
+    }));
+
   return {
     user: {
       id: user.id,
@@ -380,6 +454,11 @@ export async function loadApp(user: AppUser, query = ''): Promise<Payload> {
     teams: teamResult.results ?? [],
     products: productResult.results ?? [],
     cases,
+    salesAccounts: accountRows,
+    dashboardCases,
+    salesTargets: (targetResult.results ?? []).filter(
+      (item) => user.role === 'global_admin' || item.teamId === user.teamId,
+    ),
     sent: sent.results ?? [],
     received: received.results ?? [],
     members,
@@ -420,6 +499,14 @@ async function saveCase(user: AppUser, body: Payload): Promise<{ id: number }> {
   if (status && !STATUS.has(status))
     throw new ApiError('営業ステータスを確認してください。');
   const nextAction = string(body.nextAction, '次のアクション', 500);
+  const amount = nonNegativeInteger(body.amount, '売上金額');
+  const revenuePeriod =
+    body.revenuePeriod === 'current'
+      ? 'current'
+      : body.revenuePeriod === 'next'
+        ? 'next'
+        : null;
+  if (!revenuePeriod) throw new ApiError('売上時期を選んでください。');
   const isDraft = boolean(body.isDraft, '下書き設定');
   const listVisible = boolean(body.listVisible, '一覧公開設定');
   const showDepartment = boolean(body.showDepartment, '部署名の公開設定');
@@ -455,6 +542,8 @@ async function saveCase(user: AppUser, body: Payload): Promise<{ id: number }> {
     department || null,
     issueSummary || null,
     status || null,
+    amount,
+    revenuePeriod,
     nextAction || null,
     Number(isDraft),
     Number(listVisible),
@@ -466,14 +555,14 @@ async function saveCase(user: AppUser, body: Payload): Promise<{ id: number }> {
   if (id) {
     await database()
       .prepare(
-        'UPDATE sales_cases SET account_kind = ?, account_name = ?, department = ?, issue_summary = ?, status = ?, next_action = ?, is_draft = ?, list_visible = ?, show_department = ?, show_issue = ?, updated_at = ? WHERE id = ? AND creator_id = ?',
+        'UPDATE sales_cases SET account_kind = ?, account_name = ?, department = ?, issue_summary = ?, status = ?, amount = ?, revenue_period = ?, next_action = ?, is_draft = ?, list_visible = ?, show_department = ?, show_issue = ?, updated_at = ? WHERE id = ? AND creator_id = ?',
       )
       .bind(...values, id, user.id)
       .run();
   } else {
     const inserted = await database()
       .prepare(
-        'INSERT INTO sales_cases (creator_id, team_id, account_kind, account_name, department, issue_summary, status, next_action, is_draft, list_visible, show_department, show_issue, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id',
+        'INSERT INTO sales_cases (creator_id, team_id, account_kind, account_name, department, issue_summary, status, amount, revenue_period, next_action, is_draft, list_visible, show_department, show_issue, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id',
       )
       .bind(user.id, teamId, ...values)
       .first<{ id: number }>();
@@ -496,6 +585,85 @@ async function saveCase(user: AppUser, body: Payload): Promise<{ id: number }> {
   await database().batch(statements);
   await audit(user.id, id ? 'case_updated' : 'case_created', 'case', caseId);
   return { id: caseId! };
+}
+
+async function saveSalesAccount(
+  user: AppUser,
+  body: Payload,
+): Promise<{ id: number }> {
+  const teamId = requireTeam(user);
+  const id = body.id == null ? null : integer(body.id, '営業先ID');
+  const name = string(body.name, '営業先名', 200, true);
+  const kind =
+    body.kind === 'university'
+      ? 'university'
+      : body.kind === 'company'
+        ? 'company'
+        : null;
+  if (!kind) throw new ApiError('営業先の種類を選んでください。');
+  const priority = body.priority;
+  if (priority !== 'high' && priority !== 'medium' && priority !== 'low')
+    throw new ApiError('優先度を選んでください。');
+  const scale = body.scale;
+  if (scale !== 'large' && scale !== 'medium' && scale !== 'small')
+    throw new ApiError('規模感を選んでください。');
+
+  if (id) {
+    const existing = await database()
+      .prepare('SELECT team_id AS teamId FROM sales_accounts WHERE id = ?')
+      .bind(id)
+      .first<{ teamId: number }>();
+    if (!existing || existing.teamId !== teamId)
+      throw new ApiError('営業先を編集できません。', 403);
+  }
+  const duplicate = await database()
+    .prepare(
+      'SELECT id FROM sales_accounts WHERE team_id = ? AND name = ? COLLATE NOCASE AND (? IS NULL OR id != ?)',
+    )
+    .bind(teamId, name, id, id)
+    .first();
+  if (duplicate) throw new ApiError('同じ営業先がすでに登録されています。');
+
+  const now = new Date().toISOString();
+  if (id) {
+    await database()
+      .prepare(
+        'UPDATE sales_accounts SET kind = ?, name = ?, priority = ?, scale = ?, updated_at = ? WHERE id = ? AND team_id = ?',
+      )
+      .bind(kind, name, priority, scale, now, id, teamId)
+      .run();
+    await audit(user.id, 'sales_account_updated', 'sales_account', id);
+    return { id };
+  }
+  const inserted = await database()
+    .prepare(
+      'INSERT INTO sales_accounts (team_id, creator_id, kind, name, priority, scale, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id',
+    )
+    .bind(teamId, user.id, kind, name, priority, scale, now)
+    .first<{ id: number }>();
+  if (!inserted) throw new Error('営業先を保存できませんでした。');
+  await audit(user.id, 'sales_account_created', 'sales_account', inserted.id);
+  return { id: inserted.id };
+}
+
+async function saveSalesTarget(user: AppUser, body: Payload): Promise<void> {
+  const teamId = requireTeam(user);
+  const period =
+    body.period === 'current'
+      ? 'current'
+      : body.period === 'next'
+        ? 'next'
+        : null;
+  if (!period) throw new ApiError('対象期間を選んでください。');
+  const revenueTarget = nonNegativeInteger(body.revenueTarget, '目標売上');
+  const caseTarget = nonNegativeInteger(body.caseTarget, '目標案件数');
+  await database()
+    .prepare(
+      'INSERT INTO sales_targets (team_id, period, revenue_target, case_target, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (team_id, period) DO UPDATE SET revenue_target = excluded.revenue_target, case_target = excluded.case_target, updated_at = excluded.updated_at',
+    )
+    .bind(teamId, period, revenueTarget, caseTarget, new Date().toISOString())
+    .run();
+  await audit(user.id, 'sales_target_updated', 'sales_target', teamId);
 }
 
 async function saveProduct(
@@ -824,6 +992,11 @@ export async function performAction(
   switch (action) {
     case 'saveCase':
       return saveCase(user, body);
+    case 'saveSalesAccount':
+      return saveSalesAccount(user, body);
+    case 'saveSalesTarget':
+      await saveSalesTarget(user, body);
+      return {};
     case 'saveProduct':
       return saveProduct(user, body);
     case 'sendConsultation':

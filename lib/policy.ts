@@ -47,6 +47,8 @@ export function visibleCaseFields<
     department: string | null;
     issueSummary: string | null;
     status: string | null;
+    amount: number;
+    revenuePeriod: string;
     nextAction: string | null;
   },
 >(viewer: Viewer, salesCase: T): T {
@@ -56,6 +58,8 @@ export function visibleCaseFields<
     department: salesCase.showDepartment ? salesCase.department : null,
     issueSummary: salesCase.showIssue ? salesCase.issueSummary : null,
     status: null,
+    amount: 0,
+    revenuePeriod: salesCase.revenuePeriod,
     nextAction: null,
   };
 }
