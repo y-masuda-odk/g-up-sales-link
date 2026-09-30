@@ -2062,6 +2062,9 @@ function AdminPanel({
   const [inviteTeamId, setInviteTeamId] = useState<number | ''>(
     data.user.teamId ?? '',
   );
+  const [selectedFromTeamId, setSelectedFromTeamId] = useState<number | null>(
+    null,
+  );
   const shareMap = new Map(
     data.shares.map((item) => [
       `${item.fromTeamId}:${item.toTeamId}`,
@@ -2072,6 +2075,9 @@ function AdminPanel({
     data.user.role === 'global_admin'
       ? data.teams
       : data.teams.filter((team) => team.id === data.user.teamId);
+  const selectedFromTeam = fromTeams.find(
+    (team) => team.id === selectedFromTeamId,
+  );
   return (
     <div className="space-y-5">
       <div className="grid gap-5 lg:grid-cols-2">
@@ -2240,30 +2246,70 @@ function AdminPanel({
         <p className="section-sub">
           自部隊の案件を見せる部隊を設定します。新しい部隊は初期状態でONです。
         </p>
-        <div className="share-grid">
-          {fromTeams.map((from) => (
-            <div className="share-card" key={from.id}>
-              <h3 className="font-bold">{from.name} から公開</h3>
-              {data.teams
-                .filter((to) => to.id !== from.id)
-                .map((to) => (
-                  <Switch
-                    key={to.id}
-                    label={to.name}
-                    hint={to.companyName}
-                    checked={shareMap.get(`${from.id}:${to.id}`) ?? true}
-                    onChange={(enabled) =>
-                      void act(
-                        'setShare',
-                        { fromTeamId: from.id, toTeamId: to.id, enabled },
-                        '共有範囲を更新しました。',
-                      )
-                    }
-                  />
-                ))}
-            </div>
-          ))}
+        <div className="share-ledger">
+          {fromTeams.map((from) => {
+            const destinations = data.teams.filter((to) => to.id !== from.id);
+            const enabledCount = destinations.filter(
+              (to) => shareMap.get(`${from.id}:${to.id}`) ?? true,
+            ).length;
+            return (
+              <button
+                className="share-ledger-row"
+                key={from.id}
+                type="button"
+                onClick={() => setSelectedFromTeamId(from.id)}
+              >
+                <span>
+                  <strong>{from.name} から公開</strong>
+                  <small>{from.companyName}</small>
+                </span>
+                <span className="share-count">
+                  {enabledCount}/{destinations.length} 部隊へ公開
+                </span>
+              </button>
+            );
+          })}
         </div>
+        <Dialog
+          open={!!selectedFromTeam}
+          onOpenChange={(open) => !open && setSelectedFromTeamId(null)}
+        >
+          {selectedFromTeam && (
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+              <DialogHeader>
+                <DialogTitle>{selectedFromTeam.name} から公開</DialogTitle>
+                <DialogDescription>
+                  公開先の部隊をON/OFFで設定します。
+                </DialogDescription>
+              </DialogHeader>
+              <div className="share-dialog-list">
+                {data.teams
+                  .filter((to) => to.id !== selectedFromTeam.id)
+                  .map((to) => (
+                    <Switch
+                      key={to.id}
+                      label={to.name}
+                      hint={to.companyName}
+                      checked={
+                        shareMap.get(`${selectedFromTeam.id}:${to.id}`) ?? true
+                      }
+                      onChange={(enabled) =>
+                        void act(
+                          'setShare',
+                          {
+                            fromTeamId: selectedFromTeam.id,
+                            toTeamId: to.id,
+                            enabled,
+                          },
+                          '共有範囲を更新しました。',
+                        )
+                      }
+                    />
+                  ))}
+              </div>
+            </DialogContent>
+          )}
+        </Dialog>
       </section>
       <section className="surface p-5">
         <h2 className="section-title">登録済み利用者</h2>

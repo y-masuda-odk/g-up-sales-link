@@ -643,13 +643,50 @@
   height: 1px;
   opacity: 0;
 }
-.share-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+.share-ledger {
+  overflow: hidden;
   margin-top: 16px;
+  border: 1px solid #e0e8ed;
+  border-radius: 12px;
 }
-.share-card .switch-row {
+.share-ledger-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 15px;
+  border-top: 1px solid #e6edf1;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+.share-ledger-row:first-child {
+  border-top: 0;
+}
+.share-ledger-row:hover {
+  background: #f7fafb;
+}
+.share-ledger-row strong,
+.share-ledger-row small {
+  display: block;
+}
+.share-ledger-row strong {
+  color: #15587b;
+  font-size: 14px;
+}
+.share-ledger-row small {
+  margin-top: 2px;
+  color: #718493;
+  font-size: 12px;
+}
+.share-count {
+  flex: none;
+  color: #5b7180;
+  font-size: 12px;
+  font-weight: 700;
+}
+.share-dialog-list .switch-row {
   margin-top: 9px;
 }
 .member-row {
@@ -837,8 +874,7 @@
   .form-grid,
   .product-checks,
   .switch-grid,
-  .product-grid,
-  .share-grid {
+  .product-grid {
     grid-template-columns: 1fr;
   }
   .case-row {
