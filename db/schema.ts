@@ -325,6 +325,30 @@ export const catalogProducts = sqliteTable(
   (table) => [index('idx_catalog_products_team').on(table.teamId)],
 );
 
+export const productAttachments = sqliteTable(
+  'product_attachments',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    productId: integer('product_id')
+      .notNull()
+      .references(() => catalogProducts.id),
+    uploadedBy: integer('uploaded_by')
+      .notNull()
+      .references(() => users.id),
+    fileName: text('file_name').notNull(),
+    contentType: text('content_type').notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    objectKey: text('object_key').notNull(),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index('idx_product_attachments_product').on(table.productId),
+    uniqueIndex('idx_product_attachments_object_key').on(table.objectKey),
+  ],
+);
+
 export const caseProducts = sqliteTable(
   'case_products',
   {

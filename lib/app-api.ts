@@ -268,6 +268,7 @@ export async function loadApp(user: AppUser, query = ''): Promise<Payload> {
     companyResult,
     teamResult,
     productResult,
+    attachmentResult,
     caseResult,
     linkResult,
     shareResult,
@@ -289,9 +290,31 @@ export async function loadApp(user: AppUser, query = ''): Promise<Payload> {
       }>(),
     db
       .prepare(
-        'SELECT p.id, p.team_id AS teamId, p.name, p.description, p.target_customer AS targetCustomer, p.outcome, p.contact, t.name AS teamName FROM catalog_products p JOIN teams t ON t.id = p.team_id ORDER BY p.updated_at DESC',
+        'SELECT p.id, p.team_id AS teamId, p.name, p.description, p.target_customer AS targetCustomer, p.outcome, p.contact, t.name AS teamName, c.name AS companyName FROM catalog_products p JOIN teams t ON t.id = p.team_id JOIN companies c ON c.id = t.company_id ORDER BY c.name, p.name',
       )
-      .all(),
+      .all<{
+        id: number;
+        teamId: number;
+        name: string;
+        description: string | null;
+        targetCustomer: string | null;
+        outcome: string | null;
+        contact: string | null;
+        teamName: string;
+        companyName: string;
+      }>(),
+    db
+      .prepare(
+        'SELECT id, product_id AS productId, file_name AS fileName, content_type AS contentType, size_bytes AS sizeBytes, created_at AS createdAt FROM product_attachments ORDER BY created_at DESC',
+      )
+      .all<{
+        id: number;
+        productId: number;
+        fileName: string;
+        contentType: string;
+        sizeBytes: number;
+        createdAt: string;
+      }>(),
     db
       .prepare(
         'SELECT c.id, c.creator_id AS creatorId, c.team_id AS teamId, c.account_kind AS accountKind, c.account_name AS accountName, c.department, c.issue_summary AS issueSummary, c.status, c.amount, c.revenue_period AS revenuePeriod, c.next_action AS nextAction, c.is_draft AS isDraft, c.list_visible AS listVisible, c.show_department AS showDepartment, c.show_issue AS showIssue, c.created_at AS createdAt, c.updated_at AS updatedAt, u.name AS ownerName, u.email AS ownerEmail, t.name AS teamName FROM sales_cases c JOIN users u ON u.id = c.creator_id JOIN teams t ON t.id = c.team_id ORDER BY c.updated_at DESC',
@@ -452,7 +475,12 @@ export async function loadApp(user: AppUser, query = ''): Promise<Payload> {
     },
     companies: companyResult.results ?? [],
     teams: teamResult.results ?? [],
-    products: productResult.results ?? [],
+    products: (productResult.results ?? []).map((product) => ({
+      ...product,
+      attachments: (attachmentResult.results ?? []).filter(
+        (attachment) => attachment.productId === product.id,
+      ),
+    })),
     cases,
     salesAccounts: accountRows,
     dashboardCases,

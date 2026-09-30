@@ -8,6 +8,7 @@ import {
   ClipboardList,
   ContactRound,
   CircleDollarSign,
+  FileText,
   GraduationCap,
   Handshake,
   LogOut,
@@ -18,6 +19,7 @@ import {
   Settings2,
   ShieldCheck,
   Target,
+  Upload,
 } from 'lucide-react';
 import {
   Bar,
@@ -28,6 +30,15 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 type User = {
   id: number;
@@ -46,11 +57,20 @@ type Product = {
   id: number;
   teamId: number;
   teamName: string;
+  companyName: string;
   name: string;
   description: string | null;
   targetCustomer: string | null;
   outcome: string | null;
   contact: string | null;
+  attachments: {
+    id: number;
+    productId: number;
+    fileName: string;
+    contentType: string;
+    sizeBytes: number;
+    createdAt: string;
+  }[];
 };
 type SelectedProduct = {
   productId: number;
@@ -328,6 +348,9 @@ export default function Home() {
   const [caseForm, setCaseForm] = useState<CaseForm | null>(null);
   const [productForm, setProductForm] = useState<ProductForm | null>(null);
   const [accountForm, setAccountForm] = useState<SalesAccountForm | null>(null);
+  const [selectedProductId, setSelectedProductId] = useState<number | null>(
+    null,
+  );
   const [consultForm, setConsultForm] = useState<ConsultForm | null>(null);
   const [dashboardPeriod, setDashboardPeriod] = useState<'current' | 'next'>(
     'current',
@@ -387,6 +410,34 @@ export default function Home() {
         error instanceof Error ? error.message : '処理に失敗しました。',
       );
       return null;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function uploadProductFile(productId: number, file: File) {
+    setBusy(true);
+    setNotice('');
+    try {
+      const form = new FormData();
+      form.set('productId', String(productId));
+      form.set('file', file);
+      const response = await fetch('/api/product-files', {
+        method: 'POST',
+        body: form,
+        credentials: 'same-origin',
+      });
+      const result = (await response.json()) as { error?: string };
+      if (!response.ok)
+        throw new Error(result.error ?? '資料をアップロードできませんでした。');
+      await reload();
+      setNotice('資料を追加しました。');
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : '資料をアップロードできませんでした。',
+      );
     } finally {
       setBusy(false);
     }
@@ -566,6 +617,9 @@ export default function Home() {
   }
 
   const me = data.user;
+  const selectedProduct = data.products.find(
+    (product) => product.id === selectedProductId,
+  );
   const ownTeam = data.teams.find((team) => team.id === me.teamId);
   const isAdmin = me.role !== 'member';
   const blockedTargets = new Set(
@@ -1718,54 +1772,161 @@ export default function Home() {
                   </button>
                 )}
               </div>
-              <div className="product-grid">
-                {data.products.map((product) => (
-                  <article className="product-card" key={product.id}>
-                    <div className="case-icon">
-                      <PackageOpen size={19} />
-                    </div>
-                    <p className="mt-3 text-xs text-muted-foreground">
-                      {product.teamName}
-                    </p>
-                    <h3 className="mt-1 font-bold">{product.name}</h3>
-                    {product.description && (
-                      <p className="mt-2 text-sm">{product.description}</p>
-                    )}
-                    {product.targetCustomer && (
-                      <p className="mt-2 text-xs">
-                        対象: {product.targetCustomer}
-                      </p>
-                    )}
-                    {product.outcome && (
-                      <p className="mt-1 text-xs">効果: {product.outcome}</p>
-                    )}
-                    {product.contact && (
-                      <p className="mt-2 text-xs">連絡先: {product.contact}</p>
-                    )}
-                    {product.teamId === me.teamId && (
-                      <button
-                        className="outline-button mt-4"
-                        onClick={() =>
-                          setProductForm({
-                            id: product.id,
-                            name: product.name,
-                            description: product.description ?? '',
-                            targetCustomer: product.targetCustomer ?? '',
-                            outcome: product.outcome ?? '',
-                            contact: product.contact ?? '',
-                          })
-                        }
-                      >
-                        編集
-                      </button>
-                    )}
-                  </article>
-                ))}
-                {!data.products.length && (
+              <div className="product-ledger-wrap">
+                {data.products.length ? (
+                  <table className="product-ledger">
+                    <thead>
+                      <tr>
+                        <th>会社</th>
+                        <th>商材名</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.products.map((product) => (
+                        <tr key={product.id}>
+                          <td>
+                            <strong>{product.companyName}</strong>
+                            <small>{product.teamName}</small>
+                          </td>
+                          <td>
+                            <button
+                              className="product-name-link"
+                              onClick={() => setSelectedProductId(product.id)}
+                            >
+                              <PackageOpen size={17} />
+                              {product.name}
+                              {product.attachments.length > 0 && (
+                                <span>
+                                  {product.attachments.length}件の資料
+                                </span>
+                              )}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
                   <p className="empty">商材はまだ登録されていません。</p>
                 )}
               </div>
             </section>
+            <Dialog
+              open={!!selectedProduct}
+              onOpenChange={(open) => {
+                if (!open) setSelectedProductId(null);
+              }}
+            >
+              {selectedProduct && (
+                <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle className="text-xl font-bold">
+                      {selectedProduct.name}
+                    </DialogTitle>
+                    <DialogDescription>
+                      {selectedProduct.companyName} · {selectedProduct.teamName}
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="product-detail-grid">
+                    <section>
+                      <h3>説明</h3>
+                      <p>{selectedProduct.description || '未登録'}</p>
+                    </section>
+                    <section>
+                      <h3>対象顧客</h3>
+                      <p>{selectedProduct.targetCustomer || '未登録'}</p>
+                    </section>
+                    <section>
+                      <h3>期待できる効果</h3>
+                      <p>{selectedProduct.outcome || '未登録'}</p>
+                    </section>
+                    <section>
+                      <h3>連絡先</h3>
+                      <p>{selectedProduct.contact || '未登録'}</p>
+                    </section>
+                  </div>
+                  <section className="materials-section">
+                    <div>
+                      <h3 className="font-bold">商材資料</h3>
+                      <p className="section-sub">PDFを別画面で表示できます。</p>
+                    </div>
+                    {selectedProduct.attachments.length ? (
+                      <div className="materials-list">
+                        {selectedProduct.attachments.map((attachment) => (
+                          <a
+                            key={attachment.id}
+                            href={`/api/product-files?id=${attachment.id}`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <FileText size={18} />
+                            <span>
+                              <strong>{attachment.fileName}</strong>
+                              <small>
+                                {(attachment.sizeBytes / 1024 / 1024).toFixed(
+                                  1,
+                                )}
+                                MB
+                              </small>
+                            </span>
+                          </a>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="empty px-0">
+                        資料はまだ添付されていません。
+                      </p>
+                    )}
+                    {selectedProduct.teamId === me.teamId && (
+                      <label className="upload-button">
+                        <Upload size={16} />
+                        {busy ? 'アップロード中…' : 'PDFを追加'}
+                        <input
+                          type="file"
+                          accept="application/pdf,.pdf"
+                          disabled={busy}
+                          onChange={(event) => {
+                            const input = event.currentTarget;
+                            const file = input.files?.[0];
+                            if (file)
+                              void uploadProductFile(
+                                selectedProduct.id,
+                                file,
+                              ).finally(() => {
+                                input.value = '';
+                              });
+                          }}
+                        />
+                      </label>
+                    )}
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      PDF形式・1ファイル10MBまで
+                    </p>
+                  </section>
+                  {selectedProduct.teamId === me.teamId && (
+                    <DialogFooter>
+                      <button
+                        className="outline-button"
+                        onClick={() => {
+                          setProductForm({
+                            id: selectedProduct.id,
+                            name: selectedProduct.name,
+                            description: selectedProduct.description ?? '',
+                            targetCustomer:
+                              selectedProduct.targetCustomer ?? '',
+                            outcome: selectedProduct.outcome ?? '',
+                            contact: selectedProduct.contact ?? '',
+                          });
+                          setSelectedProductId(null);
+                        }}
+                      >
+                        商材情報を編集
+                      </button>
+                    </DialogFooter>
+                  )}
+                </DialogContent>
+              )}
+            </Dialog>
             {productForm && (
               <section className="surface p-5">
                 <div className="section-head">
